@@ -8,7 +8,7 @@ on:
     branches: ["main"]
   workflow_dispatch:
     inputs:
-      evironment:
+      environment:
         description: "Environment Deploy To..."
         required: true
         type: choice
@@ -34,8 +34,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  mainPythonVersion: 3.8
-  mainOS: ubuntu-latest
   DockerImageName: todoapp
 
 jobs:
@@ -100,14 +98,14 @@ jobs:
   docker-ci:
     name: Build and Push Image
     runs-on: ubuntu-latest
-    if: ${{ github.ref_name == 'main' }}
+    if: github.ref_name == 'main'
     needs: python-ci
     steps:
       - name: Download python artifacts
         uses: actions/download-artifact@v4
         with:
-          name: python-artifacts-${{ matrix.OsType }}-${{ matrix.PythonVersion }}
-          path: .
+          name: python-artifacts-${{ github.event.inputs.artifact }}
+          path: ./src
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -131,8 +129,8 @@ jobs:
       - name: Download helm artifacts
         uses: actions/download-artifact@v4
         with:
-          name: helm-artifacts-${{ matrix.OsType }}-${{ matrix.PythonVersion }}
-          path: .
+          name: helm-artifacts-${{ github.event.inputs.artifact }}
+          path: ./todoapp
 
       - name: Set Up Helm
         uses: azure/setup-helm@v4.2.0
@@ -154,15 +152,21 @@ jobs:
 
   deploy-helm-dev:
     name: Deploy helm to Development
+    if: ${{ github.event.inputs.environment == 'development' }}
     uses: ./.github/workflows/reusable-deployment.yml
     needs: [helm-ci, docker-ci]
     secrets: inherit
     with:
       environment: development
       version: ${{ github.sha }}
+      artifact-name: python-artifacts-${{ github.event.inputs.artifact }}
+      helm-artifact-name: helm-package
+      kind-artifact-name: kind-cluster-${{ github.event.inputs.artifact }}
+      DockerImageName: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DockerImageName }}
 
   deploy-helm-stg:
     name: Deploy helm to Staging
+    if: ${{ github.event.inputs.environment == 'staging' }}
     uses: ./.github/workflows/reusable-deployment.yml
     needs: [deploy-helm-dev]
     secrets: inherit
@@ -171,3 +175,7 @@ jobs:
       version: ${{ github.sha }}
       helm-values-path: ./todoapp/values/stg.yaml
       helm-release-name: todoapp-staging
+      artifact-name: python-artifacts-${{ github.event.inputs.artifact }}
+      helm-artifact-name: helm-package
+      kind-artifact-name: kind-cluster-${{ github.event.inputs.artifact }}
+      DockerImageName: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DockerImageName }}
