@@ -34,7 +34,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  DockerImageName: todoapp
+  DockerImageName: mkostiuk98/todoapp
 
 jobs:
   python-ci:
